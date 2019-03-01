@@ -1,0 +1,11 @@
+apiVersion: devopsconsole.openshift.io/v1alpha1
+kind: Component
+metadata:
+  name: nodejs-component
+spec:
+  image: "nodejs"
+  source: "https://github.com/sclorg/nodejs-ex.git"
+  app: "myapp"
+  codebase: "https://github.com/sclorg/nodejs-ex.git"
+  buildtype: "nodejs"
+  listenport: "8080"
