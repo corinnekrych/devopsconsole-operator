@@ -121,6 +121,7 @@ test-e2e: build build-image e2e-setup
 .PHONY: e2e-setup
 e2e-setup:  e2e-cleanup
 	oc new-project devconsole-e2e-test || true
+	@-oc apply -f $(DEPLOY_DIR)/crds/devopsconsole_v1alpha1_component_crd.yaml
 
 .PHONY: e2e-cleanup
 e2e-cleanup:
@@ -345,3 +346,22 @@ CLEAN_TARGETS += clean-coverage-unit
 # Removes unit test coverage file
 clean-coverage-unit:
 	-@rm -f $(COV_PATH_UNIT)
+
+#-------------------------------------------------------------------------------
+# e2e test in dev mode
+#-------------------------------------------------------------------------------
+
+.PHONY: build-image-local
+build-image-local:
+	@eval $$(minishift docker-env) && operator-sdk build $(shell minishift openshift registry)/devconsole-e2e-test/devopsconsole-operator
+
+.PHONY: e2e-local
+e2e-local: build-image-local
+	@-oc project devconsole-e2e-test
+	@-oc apply -f deploy/crds/devopsconsole_v1alpha1_component_crd.yaml
+	@-oc apply -f deploy/service_account.yaml --namespace devconsole-e2e-test
+	@-oc apply -f deploy/role.yaml --namespace devconsole-e2e-test
+	@-oc apply -f deploy/role_binding.yaml --namespace devconsole-e2e-test
+	@eval $$(minishift docker-env) && oc apply -f deploy/operator.yaml --namespace devconsole-e2e-test
+	@eval $$(minishift docker-env) && operator-sdk test local ./test/e2e --namespace devconsole-e2e-test --no-setup
+
