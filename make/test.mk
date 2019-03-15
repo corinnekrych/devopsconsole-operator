@@ -353,7 +353,8 @@ clean-coverage-unit:
 
 .PHONY: build-image-local
 build-image-local:
-	@eval $$(minishift docker-env) && operator-sdk build $(shell minishift openshift registry)/devconsole-e2e-test/devopsconsole-operator
+	eval $$(minishift docker-env) && operator-sdk build $(shell minishift openshift registry)/devconsole-e2e-test/devopsconsole-operator
+	eval $$(minishift docker-env) && docker login -u developer -p $(shell oc whoami -t) $(shell minishift openshift registry) && docker push 172.30.1.1:5000/devconsole-e2e-test/devopsconsole-operator:latest
 
 .PHONY: e2e-local
 e2e-local: build-image-local

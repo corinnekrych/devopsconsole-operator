@@ -1,7 +1,6 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  creationTimestamp: null
   name: devopsconsole-operator
 rules:
 - apiGroups:
@@ -36,12 +35,17 @@ rules:
   - devopsconsole.openshift.io
   resources:
   - '*'
-  - components
   verbs:
   - '*'
 - apiGroups:
-  - components.devopsconsole.openshift.io
+  - image.openshift.io
   resources:
+  - imagestreams
+  verbs:
   - '*'
+- apiGroups:
+  - build.openshift.io
+  resources:
+  - buildconfigs
   verbs:
   - '*'
