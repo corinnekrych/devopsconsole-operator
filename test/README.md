@@ -13,55 +13,57 @@ make test-e2e-local
 ## Steps to verify operator registry on OCP4
 ### Pre-requisites
 * have a 48h-ephemeral cluster on AWS for OCP4
-* have a quay account
 * `oc` client installed
 > NOTE: you can also do all those steps with the UI
 
-### 1. Build and push image to quay
+### 1 and 2. create a catalog and subscription
+* Create CatalogSource and associate subscription
+Here we reuse [operator-registry image](../Dockerfile.registry) built by CI:
 ```
-QUAY_USERNAME=YYY QUAY_PASSWORD=XXX REGISTRY_ORG=YYY make push-operator-image
+oc create -f http://operatorhubio-operator-hub.devtools-dev.ext.devshift.net/installopenshift4/devconsole.v0.1.0.yaml
+catalogsource.operators.coreos.com/rhd-operatorhub-catalog created
+subscription.operators.coreos.com/my-devconsole created
 ```
-> NOTE: to test you can push to your own username in quay, therefore QUAY_USERNAME and REGISTRY_ORG are the same
-
-### 2. create a catalog 
-This catalog contains a link to the operator image you've just created in step1.
-* Create a new file `catalog.yaml`
-```
-apiVersion: operators.coreos.com/v1alpha1
+This catalog contains a link to the operator-registry image build by CI. 
+Here is the content of the remote file:
+```yaml
+apiVersion: operators.coreos.com/v1alpha1 
 kind: CatalogSource
-metadata:
-  name: my-catalog
-  namespace: openshift-operator-lifecycle-manager
-spec:
+metadata: 
+  name: rhd-operatorhub-catalog 
+  namespace: openshift-operator-lifecycle-manager 
+spec: 
   sourceType: grpc
-  image: quay.io/YYY/operator-registry:0.1.0-2613b51-dirty-1554395857
+  image: quay.io/redhat-developer/operator-registry:latest
   displayName: Community Operators
-  publisher: Red Hat
+  publisher: RHD Operator Hub 
+--- 
+apiVersion: operators.coreos.com/v1alpha1 
+kind: Subscription 
+metadata: 
+  name: my-devconsole
+  namespace: openshift-operators
+spec: 
+  channel: alpha
+  name: devconsole
+  source: rhd-operatorhub-catalog
+  sourceNamespace: openshift-operator-lifecycle-manager
 ```
-* login to OCP4 
+* login to OCP4 and verify all is well installed:
 ```
-oc apply -f catalog.yaml
-oc get catsrc —all-namespaces
+> oc project openshift-operator-lifecycle-manager
+> oc get catsrc
+NAME                      NAME                  TYPE       PUBLISHER          
+olm-operators             OLM Operators         internal   Red Hat
+rhd-operatorhub-catalog   Community Operators   grpc       RHD Operator Hub 
+> oc get sub
+NAME               READY     UP-TO-DATE   AVAILABLE 
+catalog-operator   1/1       1            1 
 ```
 You should see your new catalog.
 
-### 3. create a subscription
-* Create a new file `subscription.yaml`
-```
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  generateName: devconsole-
-  namespace: openshift-operators
-spec:
-  source: my-catalog
-  sourceNamespace: openshift-operator-lifecycle-manager
-  name: devconsole
-  startingCSV: devconsole-operator.v0.1.0
-  channel: alpha
-```
-
-### 4. Create a new Component
+### 3. Create a new Component
+1) fom the command line:
 ```
 oc new-project demo
 oc apply -f examples/devconsole_v1alpha1_gitsource_cr.yaml
@@ -69,6 +71,42 @@ oc apply -f examples/devconsole_v1alpha1_component_cr.yaml
 ```
 You should be able to see the route of your nodejs app.
 
+2) alternatively form UI:
+* create a new project
+* go to left menu "Installed Operators", 
+* see OpenShift Developer Console, hit GitSouce and enter yaml similar to 1)
+> NOTE: change the namespace with the new project you created
+```yaml
+apiVersion: devconsole.openshift.io/v1alpha1
+kind: GitSource
+metadata:
+  name: example-gitsource
+  namespace: demo
+spec:
+  url: "https://github.com/sclorg/nodejs-ex" #"https://github.com/nodeshift-starters/nodejs-rest-http-crud"
+  ref: master
+  contextDir: /cmd/manager
+  httpProxy: http://proxy.example.com
+  httpsProxy: https://proxy.example.com
+  noProxy: somedomain.com, otherdomain.com
+  secretRef:
+    name: mysecret
+  flavor: github
+```
+* click create
+* see OpenShift Developer Console, hit Component and enter yaml similar to 1)
+```yaml
+apiVersion: devconsole.openshift.io/v1alpha1
+kind: Component
+metadata:
+  name: myapp
+  namespace: demo  
+spec:
+  buildType: "nodejs"
+  gitSourceRef: "example-gitsource"
+  port: 8080
+  exposed: true
+```
 ## Steps to verify operator registry on minishift
 
 ### 1. Install OLM (not required for OpenShift 4)
