@@ -81,3 +81,12 @@ required = [
 [[constraint]]
   branch = "master"
   name = "github.com/wadey/gocovmerge"
+
+[[constraint]]
+  branch = "update.status"
+  name = "github.com/redhat-developer/devconsole-api"
+  source = "https://github.com/corinnekrych/devconsole-api.git"
+  packages = [
+    "pkg/apis",
+    "pkg/apis/devconsole/v1alpha1",
+  ]

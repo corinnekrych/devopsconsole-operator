@@ -9,9 +9,9 @@ spec:
     listKind: ComponentList
     plural: components
     singular: component
+    shortNames:
+      - cp
   scope: Namespaced
-  subresources:
-    status: {}
   validation:
     openAPIV3Schema:
       properties:
@@ -49,7 +49,14 @@ spec:
           - gitSourceRef
           type: object
         status:
-          type: object
+          properties:
+            phase:
+              description: Phase indicates which steps the component is - image creation, build, deployment.
+              type: string
+  additionalPrinterColumns:
+  - name: Status
+    type: string
+    JSONPath: .status.phase
   version: v1alpha1
   versions:
   - name: v1alpha1
