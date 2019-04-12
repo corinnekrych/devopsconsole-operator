@@ -572,7 +572,7 @@
     "pkg/apis/devconsole/v1alpha1",
   ]
   pruneopts = "NT"
-  revision = "f7ec67fdcf2de2d241431555df03819c5f9793a6"
+  revision = "b228e08053d6dd7cc96ca39d3d0c1469000553b3"
   source = "https://github.com/corinnekrych/devconsole-api.git"
 
 [[projects]]

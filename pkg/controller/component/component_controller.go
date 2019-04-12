@@ -33,12 +33,12 @@ func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
 }
 
-// newReconciler returns a new reconcile.Reconciler
+// newReconciler returns a new reconcile.Reconciler.
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	return &ReconcileComponent{client: mgr.GetClient(), scheme: mgr.GetScheme()}
 }
 
-// add adds a new Controller to mgr with r as the reconcile.Reconciler
+// add adds a new Controller to mgr with r as the reconcile.Reconciler.
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
 	c, err := controller.New("component-controller", mgr, controller.Options{Reconciler: r})
@@ -46,31 +46,37 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// Watch for changes to primary resource Component
+	// Watch for changes to primary resource Component.
 	err = c.Watch(&source.Kind{Type: &devconsoleapi.Component{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
 
-	// Watch for changes to secondary resource DeploymentConfig
+	// Watch for changes to secondary resource ImageStream.
+	err = c.Watch(&source.Kind{Type: &imagev1.ImageStream{}}, &handler.EnqueueRequestForObject{})
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to secondary resource DeploymentConfig.
 	err = c.Watch(&source.Kind{Type: &v1.DeploymentConfig{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
 
-	// Watch for changes to secondary resource BuildConfig
+	// Watch for changes to secondary resource BuildConfig.
 	err = c.Watch(&source.Kind{Type: &buildv1.BuildConfig{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
 
-	// Watch for changes to secondary resource Service
+	// Watch for changes to secondary resource Service.
 	err = c.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
 
-	// Watch for changes to secondary resource Route
+	// Watch for changes to secondary resource Route.
 	err = c.Watch(&source.Kind{Type: &routev1.Route{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
@@ -84,7 +90,7 @@ var (
 	openshiftNamespace                      = "openshift"
 )
 
-// ReconcileComponent reconciles a Component object
+// ReconcileComponent reconciles a Component object.
 type ReconcileComponent struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
@@ -93,10 +99,7 @@ type ReconcileComponent struct {
 }
 
 // Reconcile reads that state of the cluster for a Component object and makes changes based on the state read
-// and what is in the Component.Spec
-// Note:
-// The Controller will requeue the Request to be processed again if the returned error is non-nil or
-// Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
+// and what is in the Component.Spec.
 func (r *ReconcileComponent) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the Component instance
 	instance := &devconsoleapi.Component{}
@@ -111,46 +114,14 @@ func (r *ReconcileComponent) Reconcile(request reconcile.Request) (reconcile.Res
 		// Error reading the object - requeue the request/*  */.
 		return reconcile.Result{}, err
 	}
-
-	// Checking and logging secondary resource lifecycle
-	dcList := &v1.DeploymentConfigList{Items: []v1.DeploymentConfig{}}
-	lbls := map[string]string{
-		"app": instance.GetName(),
-	}
-	opts := client.ListOptions{
-		Namespace:     request.Namespace,
-		LabelSelector: labels.SelectorFromSet(lbls),
-	}
-	//opts.AsListOptions()
-	err = r.client.List(context.TODO(),
-		&opts,
-		dcList)
-	if err != nil {
-		log.Error(err, "failed to list existing DeploymentConfig")
-		return reconcile.Result{}, err
-	}
-
-	for _, dc := range dcList.Items {
-		//jsonStatusByte, _ := json.MarshalIndent(dc.Status, "", "  ")
-		//jsonMetaByte, _ := json.MarshalIndent(dc.ObjectMeta, "", "  ")
-		//log.Info("============================================================")
-		//fmt.Println("** Status:", string(jsonStatusByte))
-		//fmt.Println("** Meta:", string(jsonMetaByte))
-		//log.Info("============================================================")
-
-		if dc.Status.Replicas < dc.Spec.Replicas {
-			log.Info("👻👻  Terminating DeploymentConfig CR 👻👻" + dc.Name)
-			r.UpdateStatus(instance, devconsoleapi.PhaseDeploying)
-			if err != nil {
-				return reconcile.Result{}, err
-			}
-		} else {
-			r.UpdateStatus(instance, devconsoleapi.PhaseDeployed)
-			if err != nil {
-				return reconcile.Result{}, err
-			}
-		}
-	}
+    //buildList := &buildv1.BuildList{}
+	//r.ObserveBuild(instance, buildList)
+	bcList := &buildv1.BuildConfigList{}
+	r.ObserveBuildConfig(instance, bcList)
+	dcList := &v1.DeploymentConfigList{}
+	r.ObserveDeploymentConfig(instance, dcList)
+	//isList := &imagev1.ImageStreamList{}
+	//r.ObserveImageStream(instance, dcList)
 
 	log.Info("============================================================")
 	log.Info(fmt.Sprintf("✨✨ Reconciling Component %s, namespace %s ✨✨", request.Name, request.Namespace))
@@ -161,18 +132,15 @@ func (r *ReconcileComponent) Reconcile(request reconcile.Request) (reconcile.Res
 	log.Info("============================================================")
 
 	// Assign the generated ResourceVersion to the resource status.
-	if instance.Status.RevNumber == "" {
-		instance.Status.RevNumber = instance.ObjectMeta.ResourceVersion
-	}
+	//if instance.Status.RevNumber == "" {
+	//	log.Info("💡💡  Creating a component CR 💡💡")
+	//}
 
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
 		log.Info("👻👻 Deleting component CR 👻👻")
 		return reconcile.Result{}, nil
 	}
 
-	if instance.Status.RevNumber == instance.ObjectMeta.ResourceVersion {
-		log.Info("💡💡  Creating a component CR 💡💡")
-	}
 	gitSource, err := r.GetGitSource(instance)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -198,30 +166,147 @@ func (r *ReconcileComponent) Reconcile(request reconcile.Request) (reconcile.Res
 	if err != nil {
 		return reconcile.Result{}, err
 	}
+	var route *routev1.Route
 	if instance.Spec.Exposed == true {
-		_, err = r.CreateRoute(instance)
+		route, err = r.CreateRoute(instance)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
 	}
-	if instance.Status.RevNumber == instance.ObjectMeta.ResourceVersion {
-		log.Info("🎉🎉  All resources have been successfully created!  🎉🎉 ")
+	if instance.Status.DeploymentPhase == devconsoleapi.Deployed && instance.Status.BuildPhase == devconsoleapi.BuildComplete {
+		log.Info(fmt.Sprintf("🎉🎉  Component %s has been successfully created!  🎉🎉 ", instance.Name))
+		if route != nil {
+			log.Info(fmt.Sprintf("🎉🎉  Go to http://%s:%d  🎉🎉 ", route.Spec.Host, route.Spec.Port.TargetPort.IntVal))
+		}
 	}
 
 	return reconcile.Result{}, nil
 }
 
-// Update status of component
-func (r *ReconcileComponent) UpdateStatus(cr *devconsoleapi.Component, status string) error {
-	if cr.Status.Phase != status {
-		cr.Status.Phase = status
-		err := r.client.Update(context.TODO(), cr)
-		if err != nil {
-			log.Error(err, "** failed to update component status **")
-			return err
+// ObserveBuildConfig watch for secondary resource BuildConfig.
+func (r *ReconcileComponent) ObserveBuild(cr *devconsoleapi.Component, buildList *buildv1.BuildList) (error) {
+	lbls := map[string]string{
+		"app": cr.Name,
+	}
+	opts := client.ListOptions{
+		Namespace:     cr.Namespace,
+		LabelSelector: labels.SelectorFromSet(lbls),
+	}
+	err := r.client.List(context.TODO(),
+		&opts,
+		buildList)
+	if err != nil {
+		log.Error(err, "failed to list existing BuildConfig")
+		return err
+	}
+
+	//for _, bc := range buildList.Items {
+	//	//jsonStatusByte, _ := json.MarshalIndent(bc.Status, "", "  ")
+	//	//jsonMetaByte, _ := json.MarshalIndent(bc.ObjectMeta, "", "  ")
+	//	//log.Info("============================================================")
+	//	//fmt.Println("** Status:", string(jsonStatusByte))
+	//	//fmt.Println("** Meta:", string(jsonMetaByte))
+	//	//log.Info("============================================================")
+	//
+	//	if bc.Status.Phase == buildv1.BuildPhaseComplete {
+	//		log.Info(fmt.Sprintf("👻👻  Build Completed %s 👻👻", bc.Name))
+	//		r.UpdateBuildStatus(cr,devconsoleapi.BuildComplete)
+	//	} else if bc.Status.Phase == buildv1.BuildPhasePending {
+	//		log.Info(fmt.Sprintf("👻👻  Build Pending %s 👻👻", bc.Name))
+	//		r.UpdateBuildStatus(cr,devconsoleapi.BuildPending)
+	//	} else if bc.Status.Phase == buildv1.BuildPhaseFailed || bc.Status.Phase == buildv1.BuildPhaseError {
+	//		log.Info(fmt.Sprintf("👻👻  Scaling down BuildConfig %s 👻👻", bc.Name))
+	//		r.UpdateBuildStatus(cr,devconsoleapi.BuildFailed)
+	//	}
+	//}
+	return nil
+}
+
+// ObserveBuildConfig watch for secondary resource BuildConfig.
+func (r *ReconcileComponent) ObserveBuildConfig(cr *devconsoleapi.Component, bcList *buildv1.BuildConfigList) (error) {
+	lbls := map[string]string{
+		"app": cr.Name,
+	}
+	opts := client.ListOptions{
+		Namespace:     cr.Namespace,
+		LabelSelector: labels.SelectorFromSet(lbls),
+	}
+	err := r.client.List(context.TODO(),
+		&opts,
+		bcList)
+	if err != nil {
+		log.Error(err, "failed to list existing BuildConfig")
+		return err
+	}
+
+	for _, bc := range bcList.Items {
+		if bc.Status.LastVersion == 0 {
+			log.Info(fmt.Sprintf("👻👻  Scaling down BuildConfig %s 👻👻", bc.Name))
 		}
 	}
 	return nil
+}
+
+// ObserveDeploymentConfig watch for secondary resource DeploymentConfig.
+func (r *ReconcileComponent) ObserveDeploymentConfig(cr *devconsoleapi.Component, dcList *v1.DeploymentConfigList) (error) {
+	lbls := map[string]string{
+		"app": cr.Name,
+	}
+	opts := client.ListOptions{
+		Namespace:     cr.Namespace,
+		LabelSelector: labels.SelectorFromSet(lbls),
+	}
+	err := r.client.List(context.TODO(),
+		&opts,
+		dcList)
+	if err != nil {
+		log.Error(err, "failed to list existing DeploymentConfig")
+		return err
+	}
+
+	for _, dc := range dcList.Items {
+		if dc.Status.Replicas < dc.Spec.Replicas {
+			log.Info(fmt.Sprintf("👻👻  Scaling up DeploymentConfig %s 👻👻", dc.Name))
+			r.UpdateDeploymentStatus(cr, devconsoleapi.Deploying)
+		} else {
+			log.Info(fmt.Sprintf("✨✨ Stable DeploymentConfig %s ✨✨", dc.Name))
+			r.UpdateDeploymentStatus(cr, devconsoleapi.Deployed)
+		}
+	}
+	return nil
+}
+
+//// Update status of component.
+//func (r *ReconcileComponent) UpdateStatus(cr *devconsoleapi.Component, status *devconsoleapi.ComponentStatus) error {
+//	if status!= nil && !reflect.DeepEqual(status, cr.Status) {
+//		cr.Status = *status
+//		err := r.client.Update(context.TODO(), cr)
+//		if err != nil {
+//			log.Error(err, "** failed to update component status **")
+//			return err
+//		}
+//	}
+//	return nil
+//}
+
+// Update status of component.
+func (r *ReconcileComponent) UpdateDeploymentStatus(cr *devconsoleapi.Component, status string)  {
+	if cr.Status.DeploymentPhase != status {
+		cr.Status.DeploymentPhase = status
+		err := r.client.Update(context.TODO(), cr)
+		if err != nil {
+			log.Error(err, "** failed to update component deployment status **")
+		}
+	}
+}
+func (r *ReconcileComponent) UpdateBuildStatus(cr *devconsoleapi.Component, status string) {
+	if cr.Status.BuildPhase != status {
+		cr.Status.BuildPhase = status
+		err := r.client.Update(context.TODO(), cr)
+		if err != nil {
+			log.Error(err, "** failed to update component build status **")
+		}
+	}
 }
 
 // GetGitSource return the GitSource associated to Component CR.
@@ -252,7 +337,7 @@ func (r *ReconcileComponent) GetGitSource(cr *devconsoleapi.Component) (*devcons
 		log.Error(err, "** failed to get gitsource **")
 		return nil, err
 	}
-	// Get gitsource referenced in component
+	// Get gitsource referenced in component.
 	gitSource := &devconsoleapi.GitSource{}
 	err := r.client.Get(context.TODO(), client.ObjectKey{
 		Namespace: cr.Namespace,
@@ -341,7 +426,6 @@ func (r *ReconcileComponent) CreateDeploymentConfig(cr *devconsoleapi.Component,
 		err := r.client.Create(context.TODO(), dc)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			log.Error(err, "** DeploymentConfig creation fails **")
-			//r.UpdateStatus(cr, componentsv1alpha1.PhaseError)
 			return nil, err
 		}
 		return dc, nil

@@ -50,13 +50,16 @@ spec:
           type: object
         status:
           properties:
-            phase:
-              description: Phase indicates which steps the component is - image creation, build, deployment.
+            deploymentPhase:
+              description: DeploymentPhase indicates which phase the component deployment process is.
+              type: string
+            buildPhase:
+              description: BuildPhase indicates which phase the component build is.
               type: string
   additionalPrinterColumns:
   - name: Status
     type: string
-    JSONPath: .status.phase
+    JSONPath: .status.deploymentPhase
   version: v1alpha1
   versions:
   - name: v1alpha1
